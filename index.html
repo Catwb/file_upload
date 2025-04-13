@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Netlify 文件传输</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .file-input {
+      margin-bottom: 15px;
+    }
+    .button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-block;
+      margin-right: 10px;
+    }
+    .button:hover {
+      background-color: #45a049;
+    }
+    .status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+      display: none;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .download-link {
+      margin-top: 15px;
+    }
+    .download-link a {
+      color: #007bff;
+      text-decoration: none;
+    }
+    .download-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Netlify 文件传输</h1>
+    <div class="file-input">
+      <label for="fileUpload">选择文件上传：</label>
+      <input type="file" id="fileUpload" accept=".txt">
+    </div>
+    <button class="button" id="uploadButton">上传文件</button>
+    <button class="button" id="downloadButton">下载文件</button>
+    <div id="status" class="status"></div>
+    <div id="downloadLink" class="download-link" style="display: none;">
+      <p>文件已上传，点击以下链接下载：</p>
+      <a id="tempLink" href="#" target="_blank">下载文件</a>
+    </div>
+  </div>
+
+  <script>
+    const fileUpload = document.getElementById('fileUpload');
+    const uploadButton = document.getElementById('uploadButton');
+    const downloadButton = document.getElementById('downloadButton');
+    const statusDiv = document.getElementById('status');
+    const downloadLinkDiv = document.getElementById('downloadLink');
+    const tempLink = document.getElementById('tempLink');
+
+    // Netlify 函数的 URL
+    const netlifySiteUrl = 'https://your-netlify-site.com'; // 替换为你的 Netlify 网站 URL
+    const uploadUrl = `${netlifySiteUrl}/.netlify/functions/upload-file`;
+    const downloadUrl = `${netlifySiteUrl}/.netlify/functions/download-file`;
+    const generateTempLinkUrl = `${netlifySiteUrl}/.netlify/functions/generate-temp-link`;
+
+    // 上传文件
+    uploadButton.addEventListener('click', async () => {
+      const file = fileUpload.files[0];
+      if (!file) {
+        showError('请选择文件后再上传');
+        return;
+      }
+
+      try {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const fileData = event.target.result;
+          const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/octet-stream',
+            },
+            body: fileData,
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            showSuccess(result.message);
+            generateTemporaryLink();
+          } else {
+            const result = await response.json();
+            showError(result.error || '上传失败');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (error) {
+        showError('上传失败：' + error.message);
+      }
+    });
+
+    // 下载文件
+    downloadButton.addEventListener('click', async () => {
+      try {
+        const response = await fetch(downloadUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'downloaded-file.txt';
+          a.click();
+          window.URL.revokeObjectURL(url);
+          showSuccess('文件下载成功');
+        } else {
+          const result = await response.json();
+          showError(result.error || '下载失败');
+        }
+      } catch (error) {
+        showError('下载失败：' + error.message);
+      }
+    });
+
+    // 生成临时链接
+    async function generateTemporaryLink() {
+      try {
+        const response = await fetch(generateTempLinkUrl);
+        if (response.ok) {
+          const result = await response.json();
+          tempLink.href = result.url;
+          tempLink.textContent = result.url;
+          downloadLinkDiv.style.display = 'block';
+        } else {
+          const result = await response.json();
+          showError(result.error || '生成临时链接失败');
+        }
+      } catch (error) {
+        showError('生成临时链接失败：' + error.message);
+      }
+    }
+
+    // 显示成功消息
+    function showSuccess(message) {
+      statusDiv.textContent = message;
+      statusDiv.className = 'status success';
+      statusDiv.style.display = 'block';
+    }
+
+    // 显示错误消息
+    function showError(message) {
+      statusDiv.textContent = message;
+      statusDiv.className = 'status error';
+      statusDiv.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
